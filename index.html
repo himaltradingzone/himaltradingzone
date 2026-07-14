@@ -372,7 +372,27 @@
         // --- Firestore Data Sync (per user, synced across all devices) ---
         function subscribeToUserDoc(uid) {
             if (userDocUnsub) userDocUnsub();
-            userDocUnsub = db.collection('users').doc(uid).onSnapshot(async (docSnap) => {
+            userDocUnsub = db.collection('users').doc(uid).onSnapshot(
+                (docSnap) => handleUserDocSnapshot(docSnap, uid)
+            );
+        }
+
+        // Re-fetches the user doc directly from the server (bypassing any stale local
+        // cache) and processes it. Used as a backup for when the realtime listener
+        // connection gets paused by the browser (e.g. phone screen locked / tab
+        // backgrounded while waiting for admin approval), so switching back to the
+        // tab catches up immediately instead of needing a manual page reload.
+        async function forceRefreshUserDoc() {
+            if (!currentUser) return;
+            try {
+                const docSnap = await db.collection('users').doc(currentUser.uid).get({ source: 'server' });
+                handleUserDocSnapshot(docSnap, currentUser.uid);
+            } catch (e) {
+                console.error('Error force-refreshing user doc:', e);
+            }
+        }
+
+        async function handleUserDocSnapshot(docSnap, uid) {
                 if (!docSnap.exists) {
                     // এই ইউজারের প্রোফাইল ডকুমেন্ট Firestore-এ নেই (সম্ভবত আগে rules ব্লক করার
                     // কারণে সাইনআপের সময় তৈরি হয়নি)। এখন ডিফল্ট ডকুমেন্ট তৈরি করে দিচ্ছি,
@@ -415,11 +435,11 @@
                         const expiryDate = new Date(approvedDate.getTime() + plan.days * 24 * 60 * 60 * 1000);
                         expired = new Date() > expiryDate;
                         if (!expired) {
-                            document.getElementById('expiry-info').textContent =
+                            document.getElementById('profile-expiry-display').textContent =
                                 `মেয়াদ শেষ: ${expiryDate.toLocaleDateString('bn-BD')}`;
                         }
                     } else {
-                        document.getElementById('expiry-info').textContent = 'লাইফটাইম সাবস্ক্রিপশন';
+                        document.getElementById('profile-expiry-display').textContent = 'লাইফটাইম সাবস্ক্রিপশন';
                     }
 
                     if (expired) {
@@ -438,7 +458,6 @@
                 } else {
                     renderSubscriptionScreen(false);
                 }
-            });
         }
 
         async function saveUserData() {
@@ -701,11 +720,18 @@
             initSubscriptionUI();
             initProfileMenu();
 
+            // ট্যাব/স্ক্রিন আবার active হলে (যেমন ফোন লক খোলার পর, বা ব্রাউজার ট্যাবে ফিরে এলে)
+            // সাথে সাথে সার্ভার থেকে ফ্রেশ ডেটা এনে চেক করে নেয়, যাতে অ্যাডমিন অ্যাপ্রুভ করার পর
+            // ম্যানুয়ালি রিফ্রেশ করা না লাগে।
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') forceRefreshUserDoc();
+            });
+            window.addEventListener('focus', forceRefreshUserDoc);
+
             // --- Central Auth State Router ---
             auth.onAuthStateChanged((user) => {
                 if (user) {
                     currentUser = user;
-                    document.getElementById('user-email-display').textContent = user.email;
                     document.getElementById('pending-user-email').textContent = user.email;
                     document.getElementById('profile-email-display').textContent = user.email;
                     subscribeToUserDoc(user.uid);
@@ -737,6 +763,7 @@
                 <div class="px-4 py-2 border-b border-gray-100">
                     <p class="text-xs text-gray-500">লগইন করা আছে</p>
                     <p id="profile-email-display" class="text-sm font-medium text-gray-800 break-all"></p>
+                    <p id="profile-expiry-display" class="text-xs text-gray-500 mt-1"></p>
                 </div>
                 <button id="dropdown-logout-btn" class="logout-btn w-full text-left px-4 py-2 text-sm text-red-600 font-semibold hover:bg-red-50 transition duration-150">
                     🚪 লগ আউট
@@ -748,7 +775,10 @@
     <!-- ============ AUTH SCREEN ============ -->
     <div id="screen-auth" class="screen active">
         <div class="max-w-md mx-auto mt-10">
-            <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">📈 Himal Trading Zone</h1>
+            <h1 class="text-4xl font-extrabold mb-1 text-center tracking-tight">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">📈 Himal Trading Zone</span>
+            </h1>
+            <p class="text-center text-gray-400 text-xs font-semibold tracking-widest uppercase mb-6">Smart Trade Management</p>
             <p class="text-center text-gray-500 mb-6">আপনার অ্যাকাউন্টে লগইন করুন</p>
 
             <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
@@ -793,8 +823,11 @@
     <div id="screen-subscription" class="screen">
         <div class="max-w-2xl mx-auto mt-6">
             <div id="profile-slot-subscription" class="flex justify-end mb-2"></div>
-            <div class="flex justify-center items-center mb-4">
-                <h1 class="text-2xl font-extrabold text-gray-800">📈 Himal Trading Zone</h1>
+            <div class="flex flex-col items-center mb-4">
+                <h1 class="text-3xl font-extrabold tracking-tight">
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">📈 Himal Trading Zone</span>
+                </h1>
+                <p class="text-gray-400 text-xs font-semibold tracking-widest uppercase mt-1">Smart Trade Management</p>
             </div>
 
             <div id="subscription-expired-banner" class="hidden p-3 mb-4 rounded-lg text-sm font-medium bg-yellow-100 text-yellow-800">
@@ -868,13 +901,11 @@
     <div id="screen-app" class="screen">
         <div class="max-w-4xl mx-auto">
             <div id="profile-slot-app" class="flex justify-end mb-2"></div>
-            <h1 class="text-3xl font-extrabold text-gray-800 mb-6 border-b-4 border-primary pb-2">📈 Himal Trading Zone</h1>
-
-            <div id="auth-info" class="text-sm text-gray-600 mb-4 flex justify-between flex-wrap gap-2">
-                <div>
-                    <p class="text-sm text-gray-600">লগইন: <span class="font-medium text-primary" id="user-email-display"></span></p>
-                    <p class="text-sm text-gray-600" id="expiry-info"></p>
-                </div>
+            <div class="mb-6 border-b-4 border-primary pb-2">
+                <h1 class="text-3xl font-extrabold tracking-tight">
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">📈 Himal Trading Zone</span>
+                </h1>
+                <p class="text-gray-400 text-xs font-semibold tracking-widest uppercase mt-1">Smart Trade Management</p>
             </div>
 
             <div id="message-box" class="hidden"></div>
