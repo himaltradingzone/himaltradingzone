@@ -180,19 +180,77 @@
         // As soon as you (admin) set approved: true on a matching document
         // in Firestore console, the customer's app unlocks automatically —
         // no code, no refresh needed.
+        // Accepts boolean true OR the string "true" (in case it was typed
+        // as text in the Firebase console instead of picked as boolean type).
+        function isApprovedValue(val) {
+            return val === true || String(val).trim().toLowerCase() === 'true';
+        }
+
+        function showPaywallStatusMessage(message, isError) {
+            const el = document.getElementById('paywall-status-note');
+            if (!el) return;
+            el.textContent = message;
+            el.className = isError
+                ? 'text-xs text-red-600 mt-2 text-center'
+                : 'text-xs text-primary font-medium mt-2 text-center';
+            el.classList.remove('hidden');
+        }
+
         function listenForApproval() {
             const deviceId = getDeviceId();
             if (approvalListenerUnsubscribe) return; // already listening
             approvalListenerUnsubscribe = db.collection('payment_requests')
                 .where('deviceId', '==', deviceId)
                 .onSnapshot((snapshot) => {
+                    let found = false;
                     snapshot.forEach((doc) => {
-                        if (doc.data().approved === true) {
-                            grantLifetimeAccess();
+                        if (isApprovedValue(doc.data().approved)) {
+                            found = true;
                         }
                     });
+                    if (found) {
+                        grantLifetimeAccess();
+                    }
                 }, (error) => {
                     console.error('Approval listener error:', error);
+                    // Surface the error so it's not silently stuck on the payment page.
+                    showPaywallStatusMessage(
+                        '⚠️ স্ট্যাটাস চেক করতে সমস্যা হচ্ছে (সম্ভবত Firestore Security Rules এ read পারমিশন বন্ধ আছে)। "Check Approval Status" বাটনে চাপ দিন বা এডমিনের সাথে যোগাযোগ করুন। Error: ' + error.code,
+                        true
+                    );
+                });
+        }
+
+        // Manual one-time check, as a fallback in case the real-time
+        // listener above fails (e.g. due to permission or network issues).
+        window.checkApprovalStatusManually = function() {
+            const btn = document.getElementById('check-status-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'চেক করা হচ্ছে...'; }
+            const deviceId = getDeviceId();
+            db.collection('payment_requests')
+                .where('deviceId', '==', deviceId)
+                .get()
+                .then((snapshot) => {
+                    let found = false;
+                    snapshot.forEach((doc) => {
+                        if (isApprovedValue(doc.data().approved)) {
+                            found = true;
+                        }
+                    });
+                    if (found) {
+                        grantLifetimeAccess();
+                    } else if (snapshot.empty) {
+                        showPaywallStatusMessage('❌ এই ডিভাইসের জন্য কোনো Transaction ID খুঁজে পাওয়া যায়নি। আগে Transaction ID সাবমিট করুন।', true);
+                    } else {
+                        showPaywallStatusMessage('⏳ এখনো অ্যাপ্রুভ হয়নি। এডমিন অ্যাপ্রুভ করার পর আবার চেক করুন।', false);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Manual check error:', error);
+                    showPaywallStatusMessage('⚠️ চেক করতে সমস্যা হয়েছে: ' + error.code + '. Firestore Security Rules চেক করুন।', true);
+                })
+                .finally(() => {
+                    if (btn) { btn.disabled = false; btn.textContent = '🔄 Check Approval Status'; }
                 });
         }
 
@@ -655,9 +713,43 @@
                 document.getElementById('paywall-overlay').classList.add('hidden');
                 document.getElementById('app-content').classList.remove('hidden');
             } else {
+                // Don't show the payment page immediately — first do a quick
+                // one-time check against Firestore in case this device was
+                // already approved earlier (e.g. approved while the tab was
+                // closed). Show a lightweight "checking..." state instead so
+                // an already-approved user never sees the payment form at all.
                 document.getElementById('paywall-overlay').classList.remove('hidden');
+                document.getElementById('paywall-checking').classList.remove('hidden');
+                document.getElementById('paywall-card-main').classList.add('hidden');
                 document.getElementById('app-content').classList.add('hidden');
-                listenForApproval(); // watch Firestore in real-time for admin approval
+
+                const deviceId = getDeviceId();
+                db.collection('payment_requests')
+                    .where('deviceId', '==', deviceId)
+                    .get()
+                    .then((snapshot) => {
+                        let alreadyApproved = false;
+                        snapshot.forEach((doc) => {
+                            if (isApprovedValue(doc.data().approved)) {
+                                alreadyApproved = true;
+                            }
+                        });
+                        if (alreadyApproved) {
+                            grantLifetimeAccess(); // straight into the app, no payment page
+                        } else {
+                            document.getElementById('paywall-checking').classList.add('hidden');
+                            document.getElementById('paywall-card-main').classList.remove('hidden');
+                            listenForApproval(); // watch Firestore in real-time for admin approval
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Initial approval check error:', error);
+                        // If the check itself fails (e.g. permissions), fall back
+                        // to showing the payment page so the user isn't stuck.
+                        document.getElementById('paywall-checking').classList.add('hidden');
+                        document.getElementById('paywall-card-main').classList.remove('hidden');
+                        listenForApproval();
+                    });
                 return; // Don't initialize the trading app until access is granted
             }
 
@@ -705,7 +797,10 @@
 
     <!-- PAYWALL OVERLAY -->
     <div id="paywall-overlay">
-        <div class="paywall-card">
+        <div id="paywall-checking" class="hidden" style="color:#fff; text-align:center; padding-top:40px;">
+            <p style="font-size:1.1rem; font-weight:600;">🔄 স্ট্যাটাস যাচাই করা হচ্ছে...</p>
+        </div>
+        <div id="paywall-card-main" class="paywall-card">
             <h1 class="text-xl font-extrabold text-gray-800 mb-1 text-center">🔒 Himal Trading Zone</h1>
             <p class="text-sm text-gray-500 text-center mb-5">লাইফটাইম অ্যাক্সেসের জন্য পেমেন্ট করুন (একবার পেমেন্ট, সারাজীবন ব্যবহার)</p>
 
@@ -744,6 +839,11 @@
                 </button>
                 <p id="txn-submit-note" class="hidden mt-2"></p>
                 <p class="text-xs text-gray-400 mt-3 text-center">✅ ভেরিফাই হওয়ার সাথে সাথে পেজ নিজে থেকেই আনলক হয়ে যাবে — কোনো কোড লাগবে না।</p>
+
+                <button id="check-status-btn" onclick="checkApprovalStatusManually()" class="w-full mt-3 bg-secondary/10 text-secondary font-semibold py-2 px-4 rounded-lg hover:bg-secondary/20 transition duration-200 text-sm border border-secondary/30">
+                    🔄 Check Approval Status
+                </button>
+                <p id="paywall-status-note" class="hidden mt-2"></p>
             </div>
 
             <p class="text-center text-xs text-gray-400 mt-4">যেকোনো সমস্যায় যোগাযোগ করুন: <span class="font-medium">আপনার নাম্বার এখানে বসান</span></p>
