@@ -177,12 +177,29 @@
         function showScreen(name) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
             document.getElementById('screen-' + name).classList.add('active');
-            const globalLogoutBtn = document.getElementById('global-logout-btn');
+            const profileMenuWrapper = document.getElementById('profile-menu-wrapper');
+            const profileDropdown = document.getElementById('profile-dropdown');
             if (name === 'auth') {
-                globalLogoutBtn.classList.add('hidden');
+                profileMenuWrapper.classList.add('hidden');
             } else {
-                globalLogoutBtn.classList.remove('hidden');
+                profileMenuWrapper.classList.remove('hidden');
             }
+            profileDropdown.classList.add('hidden');
+        }
+
+        function initProfileMenu() {
+            const iconBtn = document.getElementById('profile-icon-btn');
+            const dropdown = document.getElementById('profile-dropdown');
+            const wrapper = document.getElementById('profile-menu-wrapper');
+            iconBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!wrapper.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
         }
 
         function showAuthError(msg) {
@@ -679,6 +696,7 @@
             window.changePage('daily');
             initAuthUI();
             initSubscriptionUI();
+            initProfileMenu();
 
             // --- Central Auth State Router ---
             auth.onAuthStateChanged((user) => {
@@ -686,6 +704,7 @@
                     currentUser = user;
                     document.getElementById('user-email-display').textContent = user.email;
                     document.getElementById('pending-user-email').textContent = user.email;
+                    document.getElementById('profile-email-display').textContent = user.email;
                     subscribeToUserDoc(user.uid);
                 } else {
                     currentUser = null;
@@ -702,10 +721,23 @@
 </head>
 <body class="p-4 md:p-8 min-h-screen">
 
-    <!-- Global logout button: fixed top-right, shown on every screen except auth -->
-    <button id="global-logout-btn" class="logout-btn hidden fixed top-4 right-4 z-50 bg-white text-red-600 text-sm font-semibold px-4 py-2 rounded-lg shadow-md border border-red-200 hover:bg-red-50 transition duration-150">
-        লগ আউট
-    </button>
+    <!-- Global profile menu: fixed top-right, shown on every screen except auth -->
+    <div id="profile-menu-wrapper" class="hidden fixed top-4 right-4 z-50">
+        <button id="profile-icon-btn" class="w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center shadow-md hover:bg-green-700 transition duration-150 focus:outline-none border-2 border-white">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.4c-3.3 0-9.8 1.6-9.8 4.9v2.5h19.6v-2.5c0-3.3-6.5-4.9-9.8-4.9z"/>
+            </svg>
+        </button>
+        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
+            <div class="px-4 py-2 border-b border-gray-100">
+                <p class="text-xs text-gray-500">লগইন করা আছে</p>
+                <p id="profile-email-display" class="text-sm font-medium text-gray-800 break-all"></p>
+            </div>
+            <button id="dropdown-logout-btn" class="logout-btn w-full text-left px-4 py-2 text-sm text-red-600 font-semibold hover:bg-red-50 transition duration-150">
+                🚪 লগ আউট
+            </button>
+        </div>
+    </div>
 
     <!-- ============ AUTH SCREEN ============ -->
     <div id="screen-auth" class="screen active">
