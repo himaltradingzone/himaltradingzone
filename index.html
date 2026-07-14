@@ -347,7 +347,25 @@
         function subscribeToUserDoc(uid) {
             if (userDocUnsub) userDocUnsub();
             userDocUnsub = db.collection('users').doc(uid).onSnapshot(async (docSnap) => {
-                if (!docSnap.exists) return;
+                if (!docSnap.exists) {
+                    // এই ইউজারের প্রোফাইল ডকুমেন্ট Firestore-এ নেই (সম্ভবত আগে rules ব্লক করার
+                    // কারণে সাইনআপের সময় তৈরি হয়নি)। এখন ডিফল্ট ডকুমেন্ট তৈরি করে দিচ্ছি,
+                    // যাতে অ্যাপ আটকে না থেকে এগিয়ে যায়। onSnapshot আবার নিজে থেকেই ট্রিগার হবে।
+                    try {
+                        await db.collection('users').doc(uid).set({
+                            email: currentUser ? currentUser.email : '',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            settings: state.settings,
+                            trades: [],
+                            subscription: { status: 'none' }
+                        }, { merge: true });
+                    } catch (e) {
+                        console.error('Error creating missing user profile:', e);
+                        showScreen('auth');
+                        showAuthError('প্রোফাইল তৈরি করা যায়নি। আবার চেষ্টা করুন বা Firestore rules চেক করুন।');
+                    }
+                    return;
+                }
                 const data = docSnap.data();
 
                 // sync trading data (settings + trades) live across devices
