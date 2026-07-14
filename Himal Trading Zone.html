@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Himal Trading Zone (Local)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#059669', // Emerald Green (সবুজ)
+                        'secondary': '#1d4ed8', // Blue (নীল)
+                        'background': '#f3f4f6', // Light Gray (হালকা ধূসর)
+                        'card': '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', 'sans-serif';
+            background-color: #f3f4f6;
+        }
+        .scrollable-content {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        /* Custom scrollbar for aesthetics */
+        .scrollable-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+        /* Active tab style */
+        .tab-active {
+            border-bottom: 3px solid #059669; /* primary color */
+            font-weight: 700;
+            color: #1f2937; /* dark gray */
+        }
+    </style>
+    <!-- Pure JavaScript for Local Storage Management -->
+    <script>
+        const DEFAULT_PAYOUT = 85; 
+        const BASE_RISK_PERCENTAGE = 0.02; 
+
+        // State variables initialized with default values
+        const state = {
+            settings: {
+                initialCapital: 1000,
+                dailyTarget: 50,
+                monthlyTarget: 200,
+                dailyStopLoss: 50,
+            },
+            trades: [],
+            currentBalance: 0,
+            dailyStats: {
+                pnl: 0,
+                wins: 0,
+                losses: 0,
+                isLimitReached: false, 
+                isTargetReached: false, 
+                tradesToday: 0, 
+                recommendedTradeAmount: 0, 
+            },
+            monthlyStats: {
+                pnl: 0,
+                wins: 0,
+                losses: 0,
+                monthlyGoalAchieved: false,
+            },
+            currentPage: 'daily' 
+        };
+
+        window.state = state; 
+
+        // --- Utility Functions for Date and Formatting ---
+
+        function parseTradeDate(isoString) {
+             // Trades store date as ISO string in local storage
+             return new Date(isoString);
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString('bn-BD', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        
+        function formatCurrency(amount) {
+             return `$ ${parseFloat(Math.max(0, amount)).toFixed(2).toLocaleString('en-US')}`;
+        }
+        
+        function formatPnl(amount) {
+            // Ensures negative signs are correctly placed and formatted
+            return `${amount < 0 ? '-' : ''}$ ${parseFloat(Math.abs(amount)).toFixed(2).toLocaleString('en-US')}`;
+        }
+        
+        function isToday(date) {
+            const now = new Date();
+            return date.getFullYear() === now.getFullYear() &&
+                   date.getMonth() === now.getMonth() &&
+                   date.getDate() === now.getDate();
+        }
+
+        function isThisMonth(date) {
+            const now = new Date();
+            return date.getFullYear() === now.getFullYear() &&
+                   date.getMonth() === now.getMonth();
+        }
+        
+        // Function to switch pages
+        window.changePage = function(pageName) {
+            state.currentPage = pageName;
+            
+            const dailyPage = document.getElementById('daily-page');
+            const monthlyPage = document.getElementById('monthly-page');
+            const dailyTab = document.getElementById('daily-tab');
+            const monthlyTab = document.getElementById('monthly-tab');
+
+            if (pageName === 'daily') {
+                dailyPage.classList.remove('hidden');
+                monthlyPage.classList.add('hidden');
+                dailyTab.classList.add('tab-active');
+                monthlyTab.classList.remove('tab-active');
+            } else {
+                dailyPage.classList.add('hidden');
+                monthlyPage.classList.remove('hidden');
+                dailyTab.classList.remove('tab-active');
+                monthlyTab.classList.add('tab-active');
+            }
+        }
+        
+        /**
+         * Checks if trading is allowed today based on DSL/DT status.
+         */
+        function isTradingDayActive() {
+            return !state.dailyStats.isLimitReached && !state.dailyStats.isTargetReached;
+        }
+
+        // --- Local Storage Management ---
+        
+        function loadDataFromLocal() {
+            try {
+                const storedSettings = localStorage.getItem('himal_settings');
+                const storedTrades = localStorage.getItem('himal_trades');
+                
+                if (storedSettings) {
+                    const parsedSettings = JSON.parse(storedSettings);
+                    state.settings = { ...state.settings, ...parsedSettings };
+                }
+                
+                if (storedTrades) {
+                    state.trades = JSON.parse(storedTrades);
+                }
+            } catch (e) {
+                console.error("Error loading from local storage:", e);
+                // Fallback to default state
+            }
+        }
+        function saveDataToLocal() {
+            try {
+                localStorage.setItem('himal_settings', JSON.stringify(state.settings));
+                localStorage.setItem('himal_trades', JSON.stringify(state.trades));
+            } catch (e) {
+                console.error("Error saving to local storage:", e);
+                displayMessage('ডেটা সেভ করা যায়নি! ব্রাউজারে Local Storage ব্লক করা থাকতে পারে।', 'bg-red-100 text-red-700');
+            }
+            updateUI();
+        }
+
+        // --- Core Logic and UI Update ---
+
+        function updateUI() {
+            // Update Settings input fields with current state
+            document.getElementById('current-capital').value = state.settings.initialCapital;
+            document.getElementById('daily-target').value = state.settings.dailyTarget; 
+            document.getElementById('monthly-target').value = state.settings.monthlyTarget;
+            document.getElementById('daily-stop-loss').value = state.settings.dailyStopLoss;
+            
+            // Calculate and Update Stats
+            calculateStats();
+            
+            // Current Balance Display (In Header)
+            document.getElementById('current-balance-display').textContent = formatPnl(state.currentBalance);
+
+            // Daily Summary Update
+            const pnlColor = state.dailyStats.pnl >= 0 ? 'text-primary' : 'text-red-500';
+            document.getElementById('daily-pnl').innerHTML = `<span class="${pnlColor}">${formatPnl(state.dailyStats.pnl)}</span>`;
+            document.getElementById('daily-wins').textContent = state.dailyStats.wins;
+            document.getElementById('daily-losses').textContent = state.dailyStats.losses;
+            document.getElementById('daily-stop-loss-value').textContent = formatCurrency(state.settings.dailyStopLoss || 0);
+            document.getElementById('daily-target-value').textContent = formatCurrency(state.settings.dailyTarget || 0); 
+            
+            // Next Trade Instruction & Limit Check
+            const tradeInstruction = document.getElementById('trade-instruction');
+            const tradesToday = state.dailyStats.tradesToday;
+            const logTradeBtn = document.getElementById('log-trade-btn');
+
+            const isTradingAllowed = isTradingDayActive();
+            const recommendedAmount = state.dailyStats.recommendedTradeAmount;
+
+            if (state.dailyStats.isLimitReached) {
+                tradeInstruction.innerHTML = `
+                    <div class="p-3 bg-red-100 text-red-700 font-semibold rounded-lg shadow-inner mb-4">
+                        <p>⚠️ **দৈনিক স্টপ লস (DSL)** অতিক্রম করেছে! **পরের দিন** পর্যন্ত ট্রেডিং লক থাকবে।</p>
+                    </div>
+                `;
+            } else if (state.dailyStats.isTargetReached) { 
+                tradeInstruction.innerHTML = `
+                    <div class="p-3 bg-primary text-white font-semibold rounded-lg shadow-inner mb-4">
+                        <p>🎯 অভিনন্দন! **দৈনিক টার্গেট (DT)** পূরণ হয়েছে। **পরের দিন** পর্যন্ত ট্রেডিং লক থাকবে।</p>
+                    </div>
+                `;
+            } else {
+                const dailyStopLossDisplay = formatCurrency(state.settings.dailyStopLoss || 0);
+                const recommendedDisplay = formatPnl(recommendedAmount);
+                
+                tradeInstruction.innerHTML = `
+                    <div class="p-4 bg-blue-100 text-blue-800 rounded-lg shadow-inner border border-blue-300 mb-4">
+                        <p class="font-bold text-lg mb-1">✅ ট্রেডের জন্য প্রস্তুত!</p>
+                        <p class="text-base font-semibold">প্রস্তাবিত ট্রেড অ্যামাউন্ট: <span class="text-primary font-extrabold">${recommendedDisplay}</span></p>
+                        <p class="text-sm mt-2">এটি আপনার পরবর্তী ট্রেডের জন্য **ডলারের পরিমাণের হিসেব**। বর্তমান DSL: ${dailyStopLossDisplay}।</p>
+                    </div>
+                `;
+                
+                if (recommendedAmount > 0) {
+                     document.getElementById('trade-amount').value = parseFloat(recommendedAmount).toFixed(2);
+                } else {
+                     document.getElementById('trade-amount').value = '';
+                }
+            }
+            
+            document.getElementById('daily-trade-count').textContent = tradesToday; 
+            logTradeBtn.disabled = !isTradingAllowed;
+
+            // Monthly Summary Update (Page 2)
+            const monthlyPnlColor = state.monthlyStats.pnl >= 0 ? 'text-primary' : 'text-red-500';
+            document.getElementById('monthly-pnl').innerHTML = `<span class="${monthlyPnlColor}">${formatPnl(state.monthlyStats.pnl)}</span>`;
+            document.getElementById('monthly-wins').textContent = state.monthlyStats.wins;
+            document.getElementById('monthly-losses').textContent = state.monthlyStats.losses;
+
+            const target = parseFloat(state.settings.monthlyTarget || 1);
+            const progressPercent = Math.min(100, Math.max(0, (state.monthlyStats.pnl / target) * 100));
+
+            document.getElementById('monthly-progress').style.width = `${progressPercent}%`;
+            
+            const progressEl = document.getElementById('monthly-progress');
+            if (state.monthlyStats.pnl >= state.settings.monthlyTarget && state.settings.monthlyTarget > 0) {
+                 progressEl.classList.add('bg-primary');
+                 progressEl.classList.remove('bg-yellow-500');
+            } else {
+                 progressEl.classList.add('bg-yellow-500');
+                 progressEl.classList.remove('bg-primary');
+            }
+            
+            document.getElementById('monthly-target-value-display').textContent = formatCurrency(state.settings.monthlyTarget || 0);
+
+            // Trade History (Page 2)
+            const tradeHistoryEl = document.getElementById('trade-history');
+            tradeHistoryEl.innerHTML = '';
+            
+            // Convert trade timestamps to Date objects for sorting and display
+            const tradesWithDates = state.trades.map(t => ({
+                 ...t,
+                 date: parseTradeDate(t.timestamp)
+            }));
+            
+            const sortedTrades = [...tradesWithDates].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+            if (sortedTrades.length === 0) {
+                 tradeHistoryEl.innerHTML = `<p class="text-center text-gray-500 py-4">No trades recorded yet. (এখনও কোনো ট্রেড সেভ করা হয়নি।)</p>`;
+            } else {
+                 sortedTrades.slice(0, 10).forEach(trade => {
+                    const isWin = trade.result === 'Win';
+                    const tradeColor = isWin ? 'text-primary' : 'text-red-500';
+                    const tradeBg = isWin ? 'bg-green-50' : 'bg-red-50';
+                    const pnl = isWin ? (trade.amount * (trade.payout / 100)) : -trade.amount;
+    
+                    const tradeElement = document.createElement('div');
+                    tradeElement.className = `p-3 mb-2 rounded-lg ${tradeBg} border border-gray-200 flex justify-between items-center`;
+                    tradeElement.innerHTML = `
+                        <div>
+                            <p class="font-semibold ${tradeColor}">${isWin ? '✅ Win' : '❌ Loss'}</p>
+                            <p class="text-xs text-gray-500">${formatDate(trade.date)}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm">Amount: ${formatPnl(trade.amount)}</p>
+                            <p class="font-bold ${tradeColor}">${pnl >= 0 ? '+' : ''}${formatPnl(pnl)}</p>
+                        </div>
+                    `;
+                    tradeHistoryEl.appendChild(tradeElement);
+                });
+            }
+            
+            // Ensure the correct page is displayed on update
+            window.changePage(state.currentPage);
+        }
+
+        function calculateStats() {
+            let currentBalance = parseFloat(state.settings.initialCapital || 0);
+            let dailyPnl = 0;
+            let dailyWins = 0;
+            let dailyLosses = 0;
+            let tradesToday = 0; 
+            let monthlyPnl = 0;
+            let monthlyWins = 0;
+            let monthlyLosses = 0;
+            
+            const tradesWithDates = state.trades.map(t => ({
+                 ...t,
+                 date: parseTradeDate(t.timestamp)
+            }));
+            
+            // Calculate stats in chronological order
+            const sortedTrades = [...tradesWithDates].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+            sortedTrades.forEach(trade => {
+                const pnl = trade.result === 'Win' ? (trade.amount * (trade.payout / 100)) : -trade.amount;
+                currentBalance += pnl;
+
+                if (isThisMonth(trade.date)) {
+                    monthlyPnl += pnl;
+                    if (trade.result === 'Win') monthlyWins++;
+                    else monthlyLosses++;
+
+                    if (isToday(trade.date)) {
+                        dailyPnl += pnl;
+                        if (trade.result === 'Win') dailyWins++;
+                        else dailyLosses++;
+                        tradesToday++; 
+                    }
+                }
+            });
+
+            state.currentBalance = currentBalance;
+            state.dailyStats.pnl = dailyPnl;
+            state.dailyStats.wins = dailyWins;
+            state.dailyStats.losses = dailyLosses;
+            state.dailyStats.tradesToday = tradesToday; 
+            state.monthlyStats.pnl = monthlyPnl;
+            state.monthlyStats.wins = monthlyWins;
+            state.monthlyStats.losses = monthlyLosses;
+
+            const stopLoss = parseFloat(state.settings.dailyStopLoss || 0);
+            state.dailyStats.isLimitReached = (dailyPnl < 0) && (Math.abs(dailyPnl) >= stopLoss) && (stopLoss > 0);
+
+            const dailyTarget = parseFloat(state.settings.dailyTarget || 0);
+            state.dailyStats.isTargetReached = (dailyPnl >= dailyTarget) && (dailyTarget > 0);
+
+            const monthlyTarget = parseFloat(state.settings.monthlyTarget || 0);
+            state.monthlyStats.monthlyGoalAchieved = (monthlyPnl >= monthlyTarget) && (monthlyTarget > 0);
+            
+            
+            let recommendedTradeAmount = 0;
+            
+            if (stopLoss > 0) {
+                 if (dailyPnl < 0) {
+                    const accumulatedLoss = Math.abs(dailyPnl);
+                    const payoutRate = DEFAULT_PAYOUT / 100;
+                    // Calculate amount required to recover the loss *if* the next trade is a win
+                    const requiredRecoveryAmount = accumulatedLoss / payoutRate; 
+                    const remainingDailyStopLossBuffer = Math.max(0, stopLoss - accumulatedLoss);
+                    // Risk the lesser of the recovery amount or the remaining buffer
+                    recommendedTradeAmount = Math.min(requiredRecoveryAmount, remainingDailyStopLossBuffer);
+                    
+                 } else {
+                    const initialCapital = parseFloat(state.settings.initialCapital || 0);
+                    let baseRiskAmount = initialCapital * BASE_RISK_PERCENTAGE;
+                    recommendedTradeAmount = Math.min(baseRiskAmount, stopLoss);
+                 }
+            }
+
+            if (isTradingDayActive()) {
+                 // Round up to nearest dollar, but ensure it's at least $1 if risk is calculated
+                 recommendedTradeAmount = Math.ceil(recommendedTradeAmount);
+                 recommendedTradeAmount = Math.max(1, recommendedTradeAmount);
+                 // Cannot trade more than the current balance
+                 recommendedTradeAmount = Math.min(recommendedTradeAmount, state.currentBalance); 
+
+                 state.dailyStats.recommendedTradeAmount = recommendedTradeAmount;
+            } else {
+                 state.dailyStats.recommendedTradeAmount = 0;
+            }
+        }
+
+        function saveSettings() {
+            const initialCapital = parseFloat(document.getElementById('current-capital').value) || 0;
+            const dailyTarget = parseFloat(document.getElementById('daily-target').value) || 0; 
+            const monthlyTarget = parseFloat(document.getElementById('monthly-target').value) || 0;
+            const dailyStopLoss = parseFloat(document.getElementById('daily-stop-loss').value) || 0;
+            
+            state.settings = {
+                initialCapital,
+                dailyTarget, 
+                monthlyTarget,
+                dailyStopLoss,
+            };
+
+            saveDataToLocal();
+            displayMessage('Settings saved successfully! (সেটিংস সেভ হয়েছে!)', 'bg-green-100 text-green-700');
+        }
+
+        function logTrade() {
+            const result = document.querySelector('input[name="trade-result"]:checked')?.value;
+            const amount = parseFloat(document.getElementById('trade-amount').value);
+            const payout = parseFloat(document.getElementById('payout-percent').value);
+            
+            if (!result || isNaN(amount) || amount <= 0 || isNaN(payout) || payout < 0) {
+                return displayMessage('Please enter valid trade data (Result, Amount, Payout). (সঠিক ট্রেড ডেটা দিন!)', 'bg-yellow-100 text-yellow-700');
+            }
+
+            if (!isTradingDayActive()) {
+                 return displayMessage('Sorry, the daily target/stop loss limit has been reached. No new trades should be recorded until the next day. (সীমা পূরণ হয়েছে, নতুন ট্রেড করা যাবে না!)', 'bg-red-100 text-red-700');
+            }
+            
+            if (amount > state.currentBalance) {
+                return displayMessage('ট্রেড অ্যামাউন্ট বর্তমান মূলধনের চেয়ে বেশি হতে পারে না!', 'bg-red-100 text-red-700');
+            }
+            
+            const tradeData = {
+                result, 
+                amount,
+                payout,
+                timestamp: new Date().toISOString(), // Use ISO string for local storage
+            };
+            
+            state.trades.push(tradeData);
+            saveDataToLocal();
+            
+            // Clear the radio selection after successful log
+            const checkedRadio = document.querySelector('input[name="trade-result"]:checked');
+            if (checkedRadio) checkedRadio.checked = false;
+            
+            displayMessage('Trade successfully recorded! (ট্রেড সেভ হয়েছে!)', 'bg-green-100 text-green-700');
+        }
+
+        function resetTradingData() {
+            const confirmationText = document.getElementById('reset-confirmation-input').value;
+            if (confirmationText !== 'RESET') {
+                return displayMessage('ডেটা মুছে ফেলতে কনফার্মেশন বক্সে (uppercase) "RESET" টাইপ করুন।', 'bg-red-100 text-red-700');
+            }
+            
+            // Reset to initial capital in settings
+            state.settings.initialCapital = parseFloat(document.getElementById('current-capital').value) || 0;
+
+            // Clear all trades and save
+            state.trades = [];
+            saveDataToLocal();
+                
+            document.getElementById('reset-confirmation-input').value = '';
+            document.getElementById('reset-data-btn').textContent = 'Reset All Trade Data (সমস্ত ডেটা রিসেট করুন)';
+            document.getElementById('reset-data-btn').disabled = false;
+            
+            displayMessage('✅ সমস্ত ট্রেড হিস্টরি সফলভাবে মুছে ফেলা হয়েছে! আপনি এখন নতুন লক্ষ্য এবং মূলধন সেট করতে পারেন।', 'bg-primary text-white');
+        }
+
+        function displayMessage(message, classes = 'bg-blue-100 text-blue-700') {
+            const messageBox = document.getElementById('message-box');
+            messageBox.innerHTML = `<p>${message}</p>`;
+            messageBox.className = `p-3 mb-4 rounded-lg text-sm font-medium ${classes}`;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        function initializeApp() {
+            // 1. Load data from local storage
+            loadDataFromLocal();
+            
+            // 2. Initial UI update
+            updateUI();
+            
+            // 3. Setup event listeners
+            document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
+            document.getElementById('log-trade-btn').addEventListener('click', logTrade);
+            document.getElementById('reset-data-btn').addEventListener('click', resetTradingData); 
+            
+            const balanceInput = document.getElementById('current-capital');
+            balanceInput.addEventListener('input', () => {
+                 // Update display immediately when initial capital is typed
+                 document.getElementById('current-balance-display').textContent = window.formatCurrency(parseFloat(balanceInput.value) || 0);
+                 window.calculateStats(); 
+            });
+            
+            const settingInputs = ['daily-target', 'monthly-target', 'daily-stop-loss'];
+            settingInputs.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.addEventListener('input', window.calculateStats);
+            });
+            
+            // 4. Ensure the correct page is displayed on load
+            window.changePage('daily'); 
+            
+            // Since we're using local storage, the user ID is irrelevant for storage
+            document.getElementById('auth-info').innerHTML = `
+                <p class="text-sm text-gray-600">Status: <span class="font-medium text-primary">Local Storage Active (ব্রাউজারে সেভ হচ্ছে)</span></p>
+                <p class="text-sm text-gray-600">⚠️ Data is NOT synchronized across devices. (অন্য ডিভাইসে সেভ হবে না)</p>
+            `;
+        }
+
+        window.formatCurrency = formatCurrency;
+        window.calculateStats = calculateStats;
+        
+        window.onload = initializeApp;
+    </script>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <!-- MAIN APP CONTENT -->
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-6 border-b-4 border-primary pb-2">📈 Himal Trading Zone (Local)</h1>
+        
+        <div id="auth-info" class="text-sm text-gray-600 mb-4 flex justify-between">
+            <!-- This will be updated by initializeApp() -->
+        </div>
+
+        <div id="message-box" class="hidden"></div>
+        
+        <!-- --- TAB NAVIGATION --- -->
+        <div class="flex border-b border-gray-300 mb-6 sticky top-0 bg-background/95 z-10">
+            <button id="daily-tab" onclick="changePage('daily')" class="px-4 py-3 text-sm md:text-base text-gray-600 hover:text-gray-800 transition duration-150 tab-active">
+                ☀️ Daily Summary (দৈনিক)
+            </button>
+            <button id="monthly-tab" onclick="changePage('monthly')" class="px-4 py-3 text-sm md:text-base text-gray-600 hover:text-gray-800 transition duration-150">
+                🗓️ Monthly & History (মাসিক ও হিস্টরি)
+            </button>
+        </div>
+        <!-- --- END TAB NAVIGATION --- -->
+        
+        <!-- --- DAILY PAGE CONTENT --- -->
+        <div id="daily-page" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Column 1: Settings & Trade Logger -->
+                <div class="lg:col-span-1 space-y-6">
+                    
+                    <!-- ACCOUNT SETUP CARD -->
+                    <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                        <h2 class="text-xl font-bold text-gray-700 mb-4">⚙️ Account Setup (ঝুঁকি নিয়ন্ত্রণ)</h2>
+                        <div class="space-y-3">
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Initial Capital (প্রাথমিক মূলধন, $)</span>
+                                <input type="number" id="current-capital" placeholder="1000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="0">
+                            </label>
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Daily Target (দৈনিক লক্ষ্য, $)</span>
+                                <input type="number" id="daily-target" placeholder="50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="0">
+                            </label>
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Monthly Target (মাসিক লক্ষ্য, $)</span>
+                                <input type="number" id="monthly-target" placeholder="200" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="0">
+                            </label>
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Daily Stop Loss (দৈনিক স্টপ লস, $)</span>
+                                <input type="number" id="daily-stop-loss" placeholder="50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="0">
+                            </label>
+                        </div>
+
+                        <button id="save-settings-btn" class="w-full mt-5 bg-secondary text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">
+                            Save Settings (সেটিংস সেভ করুন)
+                        </button>
+                        
+                        <!-- RESET OPTION -->
+                        <div class="mt-6 pt-6 border-t border-red-200">
+                            <h3 class="text-base font-bold text-red-600 mb-2">🔴 Data Reset (ডেটা রিসেট)</h3>
+                            <p class="text-xs text-gray-600 mb-3">মাসিক লক্ষ্য পূরণ বা নতুনভাবে শুরু করতে সব ট্রেড হিস্টরি মুছে ফেলার জন্য।</p>
+                            <label class="block mb-2">
+                                <span class="text-sm text-red-700 font-medium block mb-1">নিশ্চিত করতে "RESET" টাইপ করুন:</span>
+                                <input type="text" id="reset-confirmation-input" placeholder="RESET" class="block w-full rounded-md border-red-300 shadow-sm p-2 focus:border-red-500 focus:ring focus:ring-red-500 focus:ring-opacity-50 uppercase">
+                            </label>
+                            <button id="reset-data-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-200 shadow-md disabled:bg-red-300">
+                                Reset All Trade Data (সমস্ত ডেটা রিসেট করুন)
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- TRADE LOGGER CARD -->
+                    <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                        <h2 class="text-xl font-bold text-gray-700 mb-4">📝 Trade Log (ট্রেড লগ)</h2>
+                        
+                        <!-- Instruction for the Next Trade Size -->
+                        <div id="trade-instruction">
+                             <div class="p-3 bg-gray-100 text-gray-700 rounded-lg shadow-inner mb-4">
+                                <p>⚠️ Please set your **Daily Stop Loss** and **Daily Target** first. (অনুগ্রহ করে DSL এবং DT সেট করুন।)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <div class="mb-3">
+                                <span class="text-gray-700 font-medium block mb-2">Trade Result (ট্রেড রেজাল্ট)</span>
+                                <div class="flex space-x-4">
+                                    <label class="flex items-center p-2 bg-green-50 rounded-lg cursor-pointer flex-grow border border-green-300 hover:bg-green-100">
+                                        <input type="radio" name="trade-result" value="Win" class="form-radio text-primary h-5 w-5">
+                                        <span class="ml-2 font-semibold text-primary">✅ Win (লাভ)</span>
+                                    </label>
+                                    <label class="flex items-center p-2 bg-red-50 rounded-lg cursor-pointer flex-grow border border-red-300 hover:bg-red-100">
+                                        <input type="radio" name="trade-result" value="Loss" class="form-radio text-red-500 h-5 w-5">
+                                        <span class="ml-2 font-semibold text-red-500">❌ Loss (লস)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Trade Amount (বিনিয়োগের পরিমাণ, $)</span>
+                                <input type="number" id="trade-amount" placeholder="Enter your chosen trade size (e.g. 20.00)" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="0.01">
+                            </label>
+                            <label class="block">
+                                <span class="text-gray-700 font-medium">Payout (%) (যেমন: 85)</span>
+                                <input type="number" id="payout-percent" value="85" placeholder="85" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" min="1" max="100">
+                                <p class="text-xs text-gray-500 mt-1">**Money management calculation uses the default 85% payout and ${BASE_RISK_PERCENTAGE * 100}% base risk.**</p>
+                            </label>
+                        </div>
+                        <button id="log-trade-btn" class="w-full mt-5 bg-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition duration-200 shadow-md">
+                            Log Trade (ট্রেড সেভ করুন)
+                        </button>
+                    </div>
+
+                </div>
+                
+                <!-- Column 2: Daily Summary -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- DAILY SUMMARY CARD -->
+                    <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200 h-full">
+                        <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">☀️ Daily Summary (দৈনিক সারাংশ - ${new Date().toLocaleDateString('bn-BD')})</h2>
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <!-- Daily Trade Count -->
+                            <div class="text-center p-4 bg-blue-50 rounded-lg shadow-sm border border-blue-200">
+                                <p class="text-sm text-blue-600 font-medium">Today's Trades (ট্রেড সংখ্যা)</p>
+                                <p id="daily-trade-count" class="text-2xl font-bold text-blue-800 mt-1">0</p>
+                            </div>
+                            <!-- Daily Target Display -->
+                            <div class="text-center p-4 bg-primary/10 rounded-lg shadow-sm border border-primary/30">
+                                <p class="text-sm text-primary font-medium">Daily Target (দৈনিক লক্ষ্য)</p>
+                                <p id="daily-target-value" class="text-2xl font-bold text-primary mt-1">$ 0.00</p>
+                            </div>
+                            <!-- Daily Stop Loss Display -->
+                            <div class="text-center p-4 bg-yellow-50 rounded-lg shadow-sm border border-yellow-200">
+                                <p class="text-sm text-yellow-700 font-medium">Daily Stop Loss (DSL)</p>
+                                <p id="daily-stop-loss-value" class="text-2xl font-bold text-yellow-800 mt-1">$ 0.00</p>
+                            </div>
+                            <!-- Current Balance Display -->
+                            <div class="text-center p-4 bg-purple-50 rounded-lg shadow-sm border border-purple-200">
+                                <p class="text-sm text-purple-700 font-medium">Current Capital (বর্তমান মূলধন)</p>
+                                <p class="text-2xl font-bold text-purple-800 mt-1" id="current-balance-display">$ 0.00</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 text-center gap-4">
+                            <div class="p-3 bg-gray-100 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Today's Profit/Loss (P&L)</p>
+                                <p id="daily-pnl" class="text-2xl font-extrabold mt-1"><span class="text-gray-500">$ 0.00</span></p>
+                            </div>
+                            <div class="p-3 bg-gray-100 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Wins (লাভ)</p>
+                                <p id="daily-wins" class="text-2xl font-extrabold text-primary mt-1">0</p>
+                            </div>
+                            <div class="p-3 bg-gray-100 rounded-lg">
+                                <p class="text-xs text-gray-600 font-medium">Losses (লস)</p>
+                                <p id="daily-losses" class="text-2xl font-extrabold text-red-500 mt-1">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                
+            </div>
+        </div>
+        <!-- --- END DAILY PAGE CONTENT --- -->
+        
+        <!-- --- MONTHLY PAGE CONTENT (Initially hidden) --- -->
+        <div id="monthly-page" class="hidden max-w-2xl mx-auto space-y-6">
+             <!-- MONTHLY SUMMARY CARD -->
+            <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">🗓️ Monthly Summary (মাসিক সারাংশ)</h2>
+                
+                <div class="grid grid-cols-3 text-center gap-4 mb-4">
+                    <div class="p-3 bg-gray-100 rounded-lg">
+                        <p class="text-xs text-gray-600 font-medium">Total Profit/Loss (P&L)</p>
+                        <p id="monthly-pnl" class="text-2xl font-extrabold mt-1"><span class="text-gray-500">$ 0.00</span></p>
+                    </div>
+                    <div class="p-3 bg-gray-100 rounded-lg">
+                        <p class="text-xs text-gray-600 font-medium">Monthly Wins (মাসিক লাভ)</p>
+                        <p id="monthly-wins" class="text-2xl font-extrabold text-primary mt-1">0</p>
+                    </div>
+                    <div class="p-3 bg-gray-100 rounded-lg">
+                        <p class="text-xs text-gray-600 font-medium">Monthly Losses (মাসিক লস)</p>
+                        <p id="monthly-losses" class="text-2xl font-extrabold text-red-500 mt-1">0</p>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Monthly Goal (মাসিক লক্ষ্য - $ <span id="monthly-target-value-display">0.00</span>) Progress</p>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div id="monthly-progress" class="bg-yellow-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <!-- TRADE HISTORY CARD -->
+            <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                <h3 class="text-xl font-bold text-gray-700 mb-3 border-b pb-2">Recent Trade Log (সাম্প্রতিক ট্রেড)</h3>
+                <div id="trade-history" class="scrollable-content">
+                    <p class="text-center text-gray-500 py-4">No trades recorded yet. (এখনও কোনো ট্রেড সেভ করা হয়নি।)</p>
+                </div>
+            </div>
+            
+        </div>
+        <!-- --- END MONTHLY PAGE CONTENT --- -->
+    </div>
+</body>
+</html>
