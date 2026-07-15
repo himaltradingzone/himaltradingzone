@@ -101,12 +101,12 @@
 
         // --- Payment QR Images ---
         // এই দুইটা PNG ফাইল আপনার নিজের সার্ভারে থাকবে। নিচের পাথে/নামে
-        // (bkash.png, binance.png) নতুন ছবি আপলোড করে পুরনোটার জায়গায়
+        // (banglaqr.png, binance.png) নতুন ছবি আপলোড করে পুরনোটার জায়গায়
         // ওভাররাইট করলেই এই অ্যাপে অটোমেটিক নতুন QR দেখাবে —
         // কোনো কোড এডিট বা রিডিপ্লয়ের দরকার নেই।
         // নিচের URL/পাথ আপনার সার্ভারের সাথে মিলিয়ে বদলে নিন।
         const QR_IMAGES = {
-            bkash: 'qr/bkash.png',
+            banglaqr: 'qr/banglaqr.png',
             binance: 'qr/binance.png'
         };
 
@@ -135,7 +135,7 @@
         let currentUser = null;
         let userDocUnsub = null;
         let selectedPlan = null;
-        let selectedMethod = 'bkash';
+        let selectedMethod = 'banglaqr';
 
         // --- Utility ---
         function parseTradeDate(isoString) { return new Date(isoString); }
@@ -343,15 +343,15 @@
         function updateQrDisplay() {
             const img = document.getElementById('qr-image');
             const label = document.getElementById('qr-label');
-            const baseUrl = selectedMethod === 'bkash' ? QR_IMAGES.bkash : QR_IMAGES.binance;
+            const baseUrl = selectedMethod === 'banglaqr' ? QR_IMAGES.banglaqr : QR_IMAGES.binance;
             // cache-busting: প্রতিবার একটা নতুন টাইমস্ট্যাম্প যোগ করা হয়, তাই
             // সার্ভারে ফাইল ওভাররাইট করলেও ব্রাউজার পুরনো (cache করা) ছবি
             // না দেখিয়ে সবসময় সর্বশেষ ছবিটাই লোড করবে।
             img.src = baseUrl + '?v=' + Date.now();
-            if (selectedMethod === 'bkash') {
+            if (selectedMethod === 'banglaqr') {
                 label.textContent = 'বাংলা QR (bKash/Nagad) স্ক্যান করে পেমেন্ট করুন';
             } else {
-                label.textContent = 'Binance QR স্ক্যান করে পেমেন্ট করুন (USD)';
+                label.textContent = 'Binance QR স্ক্যান করে পেমেন্ট করুন (USDT)';
             }
         }
 
@@ -375,7 +375,7 @@
             document.getElementById('pending-plan-info').textContent =
                 plan ? `প্ল্যান: ${plan.label} (৳${plan.priceBDT} / $${plan.priceUSD})` : '';
             document.getElementById('pending-method-info').textContent =
-                sub.method === 'binance' ? 'পেমেন্ট মাধ্যম: Binance' : 'পেমেন্ট মাধ্যম: বাংলা QR (bKash/Nagad)';
+                sub.method === 'binance' ? 'পেমেন্ট মাধ্যম: Binance' : 'পেমেন্ট মাধ্যম: বাংলা QR (banglaqr/Nagad)';
             showScreen('pending');
         }
 
@@ -875,7 +875,7 @@
             <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200 mb-6">
                 <h2 class="text-xl font-bold text-gray-700 mb-4">পেমেন্ট মাধ্যম বেছে নিন</h2>
                 <div class="flex border-b border-gray-300 mb-4">
-                    <div class="method-tab selected px-4 py-2 border-b-2 border-transparent" data-method="bkash">বাংলা QR</div>
+                    <div class="method-tab selected px-4 py-2 border-b-2 border-transparent" data-method="banglaqr">বাংলা QR</div>
                     <div class="method-tab px-4 py-2 border-b-2 border-transparent" data-method="binance">Binance QR</div>
                 </div>
                 <div class="text-center">
