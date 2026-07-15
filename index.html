@@ -768,6 +768,20 @@
 </head>
 <body class="p-4 md:p-8 min-h-screen">
 
+    <!-- ============ PWA INSTALL BUTTON (floating, all screens) ============ -->
+    <button id="pwa-install-btn" class="hidden fixed bottom-5 right-5 z-50 bg-primary text-white font-semibold pl-4 pr-5 py-3 rounded-full shadow-lg hover:bg-green-700 transition duration-200 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/>
+        </svg>
+        অ্যাপ ইনস্টল করুন
+    </button>
+
+    <!-- ============ iOS "Add to Home Screen" HINT (Safari has no install prompt) ============ -->
+    <div id="ios-install-hint" class="hidden fixed bottom-0 inset-x-0 z-50 bg-gray-900 text-white text-sm p-4 flex items-center justify-between gap-3 shadow-lg">
+        <p class="leading-snug">📲 হোম স্ক্রিনে অ্যাপ হিসেবে যোগ করতে: নিচের Share <span aria-hidden="true">⬆️</span> বাটনে চাপ দিন, তারপর <strong>"Add to Home Screen"</strong> সিলেক্ট করুন।</p>
+        <button id="ios-install-hint-close" class="shrink-0 text-white/70 hover:text-white text-xl leading-none px-2">✕</button>
+    </div>
+
     <!-- Profile menu: lives in normal page flow (not fixed), gets moved by JS into the
          active screen's slot (right above the title) so it scrolls naturally with the page. -->
     <div id="profile-menu-parking" style="display:none;">
@@ -1099,10 +1113,10 @@
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
-                if (!isStandalone()) installBtn.classList.remove('hidden');
+                if (!isStandalone()) installBtn?.classList.remove('hidden');
             });
 
-            installBtn.addEventListener('click', async () => {
+            installBtn?.addEventListener('click', async () => {
                 if (!deferredPrompt) return;
                 installBtn.classList.add('hidden');
                 deferredPrompt.prompt();
@@ -1112,15 +1126,15 @@
 
             // অ্যাপ ইনস্টল হয়ে গেলে বাটন লুকিয়ে ফেলা
             window.addEventListener('appinstalled', () => {
-                installBtn.classList.add('hidden');
-                iosHint.classList.add('hidden');
+                installBtn?.classList.add('hidden');
+                iosHint?.classList.add('hidden');
             });
 
             // iOS Safari: beforeinstallprompt সাপোর্ট করে না, তাই ম্যানুয়াল ইঙ্গিত দেখানো হচ্ছে
             const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
             const isSafari = /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
             if (isIos && isSafari && !isStandalone()) {
-                iosHint.classList.remove('hidden');
+                iosHint?.classList.remove('hidden');
             }
             if (iosHintClose) {
                 iosHintClose.addEventListener('click', () => iosHint.classList.add('hidden'));
