@@ -1,1 +1,473 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Himal Trading Zone — Admin Panel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          primary: '#059669',
+          secondary: '#2563eb',
+          background: '#f3f4f6',
+          card: '#ffffff'
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { font-family: 'Segoe UI', 'Noto Sans Bengali', sans-serif; background: #f3f4f6; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+  .badge-pending { background: #fef3c7; color: #92400e; }
+  .badge-active { background: #d1fae5; color: #065f46; }
+  .badge-expired { background: #fee2e2; color: #991b1b; }
+  .badge-rejected { background: #e5e7eb; color: #374151; }
+  .badge-none { background: #e5e7eb; color: #374151; }
+</style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
 
+  <!-- ============ LOGIN SCREEN ============ -->
+  <div id="screen-login" class="screen active">
+    <div class="max-w-md mx-auto mt-16">
+      <h1 class="text-3xl font-extrabold mb-1 text-center tracking-tight">
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">🛠️ Admin Panel</span>
+      </h1>
+      <p class="text-center text-gray-400 text-xs font-semibold tracking-widest uppercase mb-6">Himal Trading Zone</p>
+      <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+        <div id="login-error" class="hidden p-3 mb-4 rounded-lg text-sm font-medium bg-red-100 text-red-700"></div>
+        <div class="space-y-3">
+          <input id="login-email" type="email" placeholder="অ্যাডমিন ইমেইল" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+          <input id="login-password" type="password" placeholder="পাসওয়ার্ড" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+          <button id="login-btn" class="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-150">লগইন</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ACCESS DENIED SCREEN ============ -->
+  <div id="screen-denied" class="screen">
+    <div class="max-w-md mx-auto mt-16 text-center">
+      <div class="bg-card p-8 rounded-xl shadow-lg border border-gray-200">
+        <p class="text-4xl mb-3">🚫</p>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">অ্যাক্সেস নেই</h2>
+        <p class="text-gray-600 mb-4">এই অ্যাকাউন্টের অ্যাডমিন প্যানেলে ঢোকার অনুমতি নেই।</p>
+        <button id="denied-logout-btn" class="bg-red-600 text-white font-semibold px-5 py-2 rounded-lg hover:bg-red-700 transition duration-150">লগ আউট</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD SCREEN ============ -->
+  <div id="screen-dashboard" class="screen">
+    <div class="max-w-5xl mx-auto">
+      <div class="flex justify-between items-center mb-1 flex-wrap gap-2">
+        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight">
+          <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">🛠️ Admin Panel</span>
+        </h1>
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-gray-500" id="admin-email-display"></span>
+          <button id="dashboard-logout-btn" class="text-sm text-red-600 font-semibold hover:underline">লগ আউট</button>
+        </div>
+      </div>
+      <p class="text-gray-400 text-xs font-semibold tracking-widest uppercase mb-6">Himal Trading Zone — User &amp; Subscription Control</p>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="bg-card p-4 rounded-xl border border-gray-200 text-center">
+          <p class="text-2xl font-extrabold text-yellow-600" id="stat-pending">0</p>
+          <p class="text-xs text-gray-500 mt-1">পেন্ডিং</p>
+        </div>
+        <div class="bg-card p-4 rounded-xl border border-gray-200 text-center">
+          <p class="text-2xl font-extrabold text-green-600" id="stat-active">0</p>
+          <p class="text-xs text-gray-500 mt-1">সক্রিয়</p>
+        </div>
+        <div class="bg-card p-4 rounded-xl border border-gray-200 text-center">
+          <p class="text-2xl font-extrabold text-red-500" id="stat-expired">0</p>
+          <p class="text-xs text-gray-500 mt-1">মেয়াদ শেষ</p>
+        </div>
+        <div class="bg-card p-4 rounded-xl border border-gray-200 text-center">
+          <p class="text-2xl font-extrabold text-gray-700" id="stat-total">0</p>
+          <p class="text-xs text-gray-500 mt-1">মোট ইউজার</p>
+        </div>
+      </div>
+
+      <!-- Search + Tabs -->
+      <div class="bg-card p-4 rounded-xl border border-gray-200 mb-4">
+        <input id="search-input" type="text" placeholder="🔍 ইমেইল দিয়ে খুঁজুন..." class="w-full px-4 py-2 mb-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+        <div class="flex gap-2 flex-wrap" id="filter-tabs">
+          <button class="filter-tab-btn px-4 py-1.5 rounded-full text-sm font-semibold border" data-filter="pending">পেন্ডিং</button>
+          <button class="filter-tab-btn px-4 py-1.5 rounded-full text-sm font-semibold border" data-filter="active">সক্রিয়</button>
+          <button class="filter-tab-btn px-4 py-1.5 rounded-full text-sm font-semibold border" data-filter="expired">মেয়াদ শেষ</button>
+          <button class="filter-tab-btn px-4 py-1.5 rounded-full text-sm font-semibold border" data-filter="all">সব</button>
+        </div>
+      </div>
+
+      <div id="user-list" class="space-y-3"></div>
+      <p id="empty-msg" class="hidden text-center text-gray-400 py-10">কোনো ইউজার পাওয়া যায়নি।</p>
+    </div>
+  </div>
+
+  <!-- Card template (cloned via JS) -->
+  <template id="user-card-template">
+    <div class="user-card bg-card p-4 rounded-xl border border-gray-200">
+      <div class="flex justify-between items-start flex-wrap gap-2">
+        <div>
+          <p class="font-semibold text-gray-800 break-all card-email"></p>
+          <p class="text-xs text-gray-400 card-uid"></p>
+        </div>
+        <span class="badge card-status-badge"></span>
+      </div>
+
+      <div class="mt-3 text-sm text-gray-600 space-y-1 card-details"></div>
+
+      <div class="mt-3 border-t border-gray-100 pt-3 card-actions"></div>
+    </div>
+  </template>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // --- Firebase Config (same project as the main app) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAHSBNlI2YD40R5iIpi2gqdJ6op291j1Gw",
+    authDomain: "himaltradingzone-web.firebaseapp.com",
+    projectId: "himaltradingzone-web",
+    storageBucket: "himaltradingzone-web.firebasestorage.app",
+    messagingSenderId: "566761984136",
+    appId: "1:566761984136:web:720a8b5911f5fce7c24f3d",
+    measurementId: "G-49TMX93JN0"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+  // --- Subscription Plans (mirrors the main app) ---
+  const PLANS = {
+    '30days':   { label: '৩০ দিন',   days: 30 },
+    '90days':   { label: '৯০ দিন',   days: 90 },
+    '1year':    { label: '১ বছর',    days: 365 },
+    'lifetime': { label: 'লাইফটাইম', days: null },
+  };
+
+  let currentAdminUid = null;
+  let allUsers = [];         // [{ id, ...data }]
+  let currentFilter = 'pending';
+  let searchTerm = '';
+  let usersUnsub = null;
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+  }
+
+  function showLoginError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // --- Auth ---
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    document.getElementById('login-error').classList.add('hidden');
+    if (!email || !password) { showLoginError('ইমেইল ও পাসওয়ার্ড দিন।'); return; }
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+    } catch (e) {
+      console.error(e);
+      showLoginError('লগইন ব্যর্থ হয়েছে। ইমেইল/পাসওয়ার্ড আবার চেক করুন।');
+    }
+  });
+
+  document.getElementById('denied-logout-btn').addEventListener('click', () => auth.signOut());
+  document.getElementById('dashboard-logout-btn').addEventListener('click', () => auth.signOut());
+
+  auth.onAuthStateChanged(async (user) => {
+    if (usersUnsub) { usersUnsub(); usersUnsub = null; }
+    if (!user) {
+      currentAdminUid = null;
+      showScreen('login');
+      return;
+    }
+    try {
+      const adminDoc = await db.collection('admins').doc(user.uid).get();
+      if (!adminDoc.exists) {
+        showScreen('denied');
+        return;
+      }
+    } catch (e) {
+      console.error('Admin check failed:', e);
+      showScreen('denied');
+      return;
+    }
+    currentAdminUid = user.uid;
+    document.getElementById('admin-email-display').textContent = user.email;
+    showScreen('dashboard');
+    subscribeUsers();
+  });
+
+  function subscribeUsers() {
+    usersUnsub = db.collection('users').onSnapshot((snap) => {
+      allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderStats();
+      renderUserList();
+    }, (err) => {
+      console.error('Error loading users:', err);
+    });
+  }
+
+  // --- Filter tabs ---
+  document.querySelectorAll('.filter-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFilter = btn.dataset.filter;
+      document.querySelectorAll('.filter-tab-btn').forEach(b => {
+        b.classList.remove('bg-primary', 'text-white', 'border-primary');
+        b.classList.add('border-gray-300', 'text-gray-600');
+      });
+      btn.classList.add('bg-primary', 'text-white', 'border-primary');
+      btn.classList.remove('border-gray-300', 'text-gray-600');
+      renderUserList();
+    });
+  });
+  // default active tab styling
+  document.querySelector('.filter-tab-btn[data-filter="pending"]').classList.add('bg-primary', 'text-white', 'border-primary');
+
+  document.getElementById('search-input').addEventListener('input', (e) => {
+    searchTerm = e.target.value.trim().toLowerCase();
+    renderUserList();
+  });
+
+  function getStatus(u) {
+    return (u.subscription && u.subscription.status) || 'none';
+  }
+
+  function renderStats() {
+    document.getElementById('stat-pending').textContent = allUsers.filter(u => getStatus(u) === 'pending').length;
+    document.getElementById('stat-active').textContent = allUsers.filter(u => getStatus(u) === 'active').length;
+    document.getElementById('stat-expired').textContent = allUsers.filter(u => getStatus(u) === 'expired').length;
+    document.getElementById('stat-total').textContent = allUsers.length;
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('bn-BD') + ' ' + d.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function badgeClass(status) {
+    return {
+      pending: 'badge-pending',
+      active: 'badge-active',
+      expired: 'badge-expired',
+      rejected: 'badge-rejected',
+      none: 'badge-none'
+    }[status] || 'badge-none';
+  }
+
+  function badgeLabel(status) {
+    return {
+      pending: 'পেন্ডিং',
+      active: 'সক্রিয়',
+      expired: 'মেয়াদ শেষ',
+      rejected: 'বাতিল',
+      none: 'সাবস্ক্রাইব করেনি'
+    }[status] || status;
+  }
+
+  function renderUserList() {
+    const container = document.getElementById('user-list');
+    container.innerHTML = '';
+
+    let list = allUsers.slice();
+    if (currentFilter !== 'all') {
+      list = list.filter(u => getStatus(u) === currentFilter);
+    }
+    if (searchTerm) {
+      list = list.filter(u => (u.email || '').toLowerCase().includes(searchTerm));
+    }
+    // পেন্ডিং রিকোয়েস্ট আগে, তারপর সবচেয়ে নতুন রিকোয়েস্ট আগে
+    list.sort((a, b) => {
+      const ta = (a.subscription && a.subscription.requestedAt && a.subscription.requestedAt.toMillis) ? a.subscription.requestedAt.toMillis() : 0;
+      const tb = (b.subscription && b.subscription.requestedAt && b.subscription.requestedAt.toMillis) ? b.subscription.requestedAt.toMillis() : 0;
+      return tb - ta;
+    });
+
+    document.getElementById('empty-msg').classList.toggle('hidden', list.length > 0);
+
+    const tmpl = document.getElementById('user-card-template');
+    list.forEach(u => {
+      const node = tmpl.content.cloneNode(true);
+      const sub = u.subscription || { status: 'none' };
+      const status = getStatus(u);
+
+      node.querySelector('.card-email').textContent = u.email || '(ইমেইল নেই)';
+      node.querySelector('.card-uid').textContent = 'UID: ' + u.id;
+      const badge = node.querySelector('.card-status-badge');
+      badge.textContent = badgeLabel(status);
+      badge.classList.add(badgeClass(status));
+
+      const details = node.querySelector('.card-details');
+      let detailsHtml = '';
+      if (sub.plan) detailsHtml += `<p>প্ল্যান: <strong>${PLANS[sub.plan] ? PLANS[sub.plan].label : sub.plan}</strong></p>`;
+      if (sub.method) detailsHtml += `<p>মাধ্যম: <strong>${sub.method === 'bkash' ? 'বাংলা QR (bKash/Nagad)' : 'Binance'}</strong></p>`;
+      if (sub.note) detailsHtml += `<p>নোট / TrxID: <span class="break-all">${escapeHtml(sub.note)}</span></p>`;
+      if (sub.requestedAt) detailsHtml += `<p>রিকোয়েস্ট করেছেন: ${fmtDate(sub.requestedAt)}</p>`;
+      if (sub.approvedAt) detailsHtml += `<p>অনুমোদিত হয়েছে: ${fmtDate(sub.approvedAt)}</p>`;
+      if (status === 'active') {
+        if (sub.expiresAt) {
+          detailsHtml += `<p>মেয়াদ শেষ হবে: <strong>${fmtDate(sub.expiresAt)}</strong></p>`;
+        } else if (sub.plan === 'lifetime') {
+          detailsHtml += `<p><strong>লাইফটাইম সাবস্ক্রিপশন</strong></p>`;
+        }
+      }
+      details.innerHTML = detailsHtml;
+
+      const actions = node.querySelector('.card-actions');
+      actions.appendChild(buildActionUI(u.id, status, sub));
+
+      container.appendChild(node);
+    });
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // Builds the plan-select + custom-days + action-button UI for one user card
+  function buildActionUI(uid, status, sub) {
+    const wrap = document.createElement('div');
+    wrap.className = 'space-y-2';
+
+    if (status === 'pending' || status === 'none' || status === 'rejected' || status === 'expired') {
+      const label = status === 'pending' ? 'রিকোয়েস্ট অ্যাপ্রুভ করুন' : 'সরাসরি অ্যাক্টিভ করুন';
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap gap-2 items-center';
+      row.innerHTML = `
+        <select class="plan-select border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+          <option value="30days">৩০ দিন</option>
+          <option value="90days">৯০ দিন</option>
+          <option value="1year">১ বছর</option>
+          <option value="lifetime">লাইফটাইম</option>
+          <option value="custom">কাস্টম (দিন সংখ্যা)</option>
+        </select>
+        <input type="number" min="1" placeholder="দিন" class="custom-days-input hidden w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+        <button class="approve-btn bg-primary text-white text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-green-700 transition duration-150">✅ ${label}</button>
+        ${status === 'pending' ? '<button class="reject-btn bg-red-100 text-red-700 text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-red-200 transition duration-150">❌ রিজেক্ট</button>' : ''}
+      `;
+      const planSelect = row.querySelector('.plan-select');
+      if (sub.plan && PLANS[sub.plan]) planSelect.value = sub.plan;
+      const customInput = row.querySelector('.custom-days-input');
+      planSelect.addEventListener('change', () => {
+        customInput.classList.toggle('hidden', planSelect.value !== 'custom');
+      });
+      row.querySelector('.approve-btn').addEventListener('click', () => {
+        approveUser(uid, planSelect.value, customInput.value);
+      });
+      const rejectBtn = row.querySelector('.reject-btn');
+      if (rejectBtn) rejectBtn.addEventListener('click', () => rejectUser(uid));
+      wrap.appendChild(row);
+    }
+
+    if (status === 'active') {
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap gap-2 items-center';
+      row.innerHTML = `
+        <select class="plan-select border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+          <option value="30days">+৩০ দিন</option>
+          <option value="90days">+৯০ দিন</option>
+          <option value="1year">+১ বছর</option>
+          <option value="lifetime">লাইফটাইম করুন</option>
+          <option value="custom">কাস্টম (দিন সংখ্যা)</option>
+        </select>
+        <input type="number" min="1" placeholder="দিন" class="custom-days-input hidden w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+        <button class="extend-btn bg-secondary text-white text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition duration-150">🔄 মেয়াদ পরিবর্তন</button>
+        <button class="deactivate-btn bg-red-100 text-red-700 text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-red-200 transition duration-150">⛔ ডিঅ্যাক্টিভেট করুন</button>
+      `;
+      const planSelect = row.querySelector('.plan-select');
+      const customInput = row.querySelector('.custom-days-input');
+      planSelect.addEventListener('change', () => {
+        customInput.classList.toggle('hidden', planSelect.value !== 'custom');
+      });
+      row.querySelector('.extend-btn').addEventListener('click', () => {
+        approveUser(uid, planSelect.value, customInput.value, true);
+      });
+      row.querySelector('.deactivate-btn').addEventListener('click', () => deactivateUser(uid));
+      wrap.appendChild(row);
+    }
+
+    return wrap;
+  }
+
+  async function approveUser(uid, planKey, customDaysStr, isExtend) {
+    try {
+      const now = new Date();
+      let expiresAt = null;
+      let planToSave = planKey;
+
+      if (planKey === 'custom') {
+        const days = parseInt(customDaysStr, 10);
+        if (!days || days <= 0) {
+          alert('দয়া করে সঠিক দিন সংখ্যা দিন।');
+          return;
+        }
+        expiresAt = firebase.firestore.Timestamp.fromDate(new Date(now.getTime() + days * 24 * 60 * 60 * 1000));
+        planToSave = 'custom';
+      } else if (planKey === 'lifetime') {
+        expiresAt = firebase.firestore.FieldValue.delete();
+      } else {
+        const plan = PLANS[planKey];
+        expiresAt = firebase.firestore.Timestamp.fromDate(new Date(now.getTime() + plan.days * 24 * 60 * 60 * 1000));
+      }
+
+      const updateData = {
+        subscription: {
+          status: 'active',
+          plan: planToSave,
+          approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          expiresAt: expiresAt
+        }
+      };
+      await db.collection('users').doc(uid).set(updateData, { merge: true });
+    } catch (e) {
+      console.error('Approve error:', e);
+      alert('অ্যাপ্রুভ করতে সমস্যা হয়েছে: ' + e.message);
+    }
+  }
+
+  async function rejectUser(uid) {
+    if (!confirm('এই রিকোয়েস্টটা রিজেক্ট করতে চান?')) return;
+    try {
+      await db.collection('users').doc(uid).set({
+        subscription: { status: 'rejected' }
+      }, { merge: true });
+    } catch (e) {
+      console.error('Reject error:', e);
+      alert('রিজেক্ট করতে সমস্যা হয়েছে: ' + e.message);
+    }
+  }
+
+  async function deactivateUser(uid) {
+    if (!confirm('এই ইউজারের সাবস্ক্রিপশন ডিঅ্যাক্টিভেট করতে চান? সে অবিলম্বে অ্যাপ থেকে বের হয়ে যাবে।')) return;
+    try {
+      await db.collection('users').doc(uid).set({
+        subscription: { status: 'none', expiresAt: firebase.firestore.FieldValue.delete() }
+      }, { merge: true });
+    } catch (e) {
+      console.error('Deactivate error:', e);
+      alert('ডিঅ্যাক্টিভেট করতে সমস্যা হয়েছে: ' + e.message);
+    }
+  }
+</script>
+</body>
+</html>
