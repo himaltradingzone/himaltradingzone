@@ -768,25 +768,6 @@
 </head>
 <body class="p-4 md:p-8 min-h-screen">
 
-    <!-- ============ PWA INSTALL BUTTON (ভাসমান, সব স্ক্রিনেই দেখা যাবে) ============ -->
-    <button id="pwa-install-btn" class="hidden fixed bottom-5 right-5 z-50 bg-secondary text-white font-semibold text-sm px-4 py-3 rounded-full shadow-lg hover:bg-blue-700 transition duration-200 flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-            <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/>
-        </svg>
-        অ্যাপ ইনস্টল করুন
-    </button>
-
-    <!-- iOS-এর জন্য ম্যানুয়াল নির্দেশনা (iOS Safari-তে অটো ইনস্টল প্রম্পট আসে না) -->
-    <div id="ios-install-hint" class="hidden fixed inset-x-4 bottom-5 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-4 max-w-sm mx-auto">
-        <div class="flex justify-between items-start gap-2">
-            <p class="text-sm text-gray-700">
-                📲 <strong>অ্যাপ হিসেবে ইনস্টল করতে:</strong> নিচের Share বাটনে ট্যাপ করুন, তারপর
-                <strong>"Add to Home Screen"</strong> সিলেক্ট করুন।
-            </p>
-            <button id="ios-install-hint-close" class="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
-        </div>
-    </div>
-
     <!-- Profile menu: lives in normal page flow (not fixed), gets moved by JS into the
          active screen's slot (right above the title) so it scrolls naturally with the page. -->
     <div id="profile-menu-parking" style="display:none;">
